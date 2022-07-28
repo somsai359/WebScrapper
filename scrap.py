@@ -1,62 +1,50 @@
-import os
-import csv
 import requests
+import bs4
 from bs4 import BeautifulSoup
-
-headers = {
-    "User-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36"}
-
-# Skills and Place of Work
-skill = input('Enter Job Title: ').strip()
-place = input('Enter the location: ').strip()
-no_of_pages = int(input('Enter the #pages to scrape: '))
+import pandas as pd
+import time
 
 
-# Creating the Main Directory
-main_dir = os.getcwd() + '\\'
-if not os.path.exists(main_dir):
-    os.mkdir(main_dir)
-    print('Base Directory Created Successfully.')
+URL = "https://in.indeed.com/jobs?q=Job%20Portal&start=10&vjk=e9f2a2b350096e8f&advn=5777929391423421"
+#conducting a request of the stated URL above:
+page = requests.get(URL)
+#specifying a desired format of “page” using the html parser - this allows python to read the various components of the page, rather than treating it as one long string.
+soup = BeautifulSoup(page.text,'html.parser')
+#printing soup in a more structured tree format that makes for easier reading
+#print(soup.prettify())
 
 
-# Name of the CSV File
-file_name = skill.title() + '_' + place.title() + '_Jobs.csv'
-# Path of the CSV File
-file_path = main_dir + file_name
+ 
+def extract_job_title_from_result(soup): 
+    jobs_list = []
+    cname_list = []
+    sal_list = []
+    loc_list = []
+    jsumm = []
+    results = []
+    i=0
+    
+    resultslist = soup.find('ul',class_="jobsearch-ResultsList css-0")
+    for e in resultslist.findAll('li'):
+        for a in e.findAll('a',class_="jcs-JobTitle"):
+            jobs_list.append(a.get_text())
+        for div in e.findAll('div',class_="company_location"):
+            cname = div.find('span',class_="companyName").get_text()
+            loc = div.find('div',class_="companyLocation").get_text()
+            cname_list.append(cname)
+            loc_list.append(loc)
+            sal_list.append(0)
 
-# Writing to the CSV File
-with open(file_path, mode='w') as file:
-    writer = csv.writer(file, delimiter=',', lineterminator='\n')
-    # Adding the Column Names to the CSV File
-    writer.writerow(
-        ['JOB_Title', 'COMPANY_NAME', 'LOCATION', 'SALARY', 'JOB SUMMARY'])
+        for div in e.findAll('div',class_= "salary-snippet-container"):
+            sal=div.get_text()
+            sal_list[i]=sal
+            i+=1
 
-    # Requesting and getting the webpage using requests
-    print(f'\nScraping in progress...\n')
-    for page in range(no_of_pages):
-        url = 'https://www.indeed.co.in/jobs?q=' + skill + \
-            '&l=' + place + '&start=' + str(page * 10)
-        response = requests.get(url, headers=headers)
-        html = response.text
-
-        # Scrapping the Web
-        soup = BeautifulSoup(html, 'lxml')
-        base_url = 'https://in.indeed.com/viewjob?jk='
-        d = soup.find('div', attrs={'id': 'mosaic-provider-jobcards'})
-
-        jobs = soup.find_all('a', class_='tapItem')
-
-        for job in jobs:
-            job_id = job['id'].split('_')[-1]
-            job_title = job.find('span', title=True).text.strip()
-            company = job.find('span', class_='companyName').text.strip()
-            location = job.find('div', class_='companyLocation').text.strip()
-            posted = job.find('span', class_='date').text.strip()
-            job_link = base_url + job_id
-            #print([job_title, company, location, posted, job_link])
-
-            # Writing to CSV File
-            writer.writerow(
-                [job_title, company, location.title(), posted, job_link])
-
-print(f'Jobs data written to <{file_name}> successfully.')
+        
+    
+    dict = {'Job title': jobs_list, 'Company name': cname_list,'Location':loc_list,'Salary':sal_list}
+    d=pd.DataFrame(dict)
+    return(d)
+  
+   
+df=extract_job_title_from_result(soup)
